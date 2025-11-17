@@ -1,0 +1,55 @@
+{
+  "name": "whoop-ai-motivator",
+  "version": "1.0.0",
+  "description": "AI-powered daily motivational messages based on Whoop health scores",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "api": "tsx src/api-server.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "echo \"Tests coming soon\"",
+    "send-daily": "tsx src/cron/daily-motivation.ts",
+    "test-setup": "tsx src/scripts/test-setup.ts",
+    "send-test-sms": "tsx src/scripts/send-test-sms.ts",
+    "test-chat": "tsx src/scripts/test-chat.ts",
+    "web:dev": "vite",
+    "web:build": "vite build",
+    "web:preview": "vite preview",
+    "setup": "npm install && cp .env.example .env && echo '\n✅ Setup complete! Please edit .env with your credentials.'"
+  },
+  "keywords": [
+    "whoop",
+    "health",
+    "ai",
+    "motivation",
+    "notifications"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@supabase/supabase-js": "^2.81.1",
+    "axios": "^1.7.7",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^16.4.5",
+    "hono": "^4.10.6",
+    "jsonwebtoken": "^9.0.2",
+    "twilio": "^5.3.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.1",
+    "zustand": "^4.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@vitejs/plugin-react": "^4.2.1",
+    "@vercel/node": "^3.2.21",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.0.8"
+  }
+}
