@@ -7,7 +7,8 @@ export const config: Config = {
   whoop: {
     clientId: process.env.WHOOP_CLIENT_ID || '',
     clientSecret: process.env.WHOOP_CLIENT_SECRET || '',
-    redirectUri: process.env.WHOOP_REDIRECT_URI || 'http://127.0.0.1:5000/callback',
+    // Redirect URI must match exactly what's registered in WHOOP Developer Dashboard
+    redirectUri: process.env.WHOOP_REDIRECT_URI || 'http://localhost:5001/api/oauth/whoop/callback',
     accessToken: process.env.WHOOP_ACCESS_TOKEN || '',
     refreshToken: process.env.WHOOP_REFRESH_TOKEN || '',
   },

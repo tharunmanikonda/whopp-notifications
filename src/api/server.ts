@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import authRoutes from './auth.js';
 import providerRoutes from './providers.js';
+import oauthRoutes from './oauth.js';
 import { config } from '../config/index.js';
 
 /**
@@ -44,6 +45,9 @@ app.route('/api/auth', authRoutes);
 
 // Mount provider routes
 app.route('/api/providers', providerRoutes);
+
+// Mount OAuth routes
+app.route('/api/oauth', oauthRoutes);
 
 // 404 handler
 app.notFound((c) => {
