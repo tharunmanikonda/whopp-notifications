@@ -51,7 +51,7 @@ export class AuthService {
    */
   generateToken(userId: string, email: string): string {
     try {
-      const payload = {
+      const payload: jwt.JwtPayload = {
         userId,
         email,
         iat: Math.floor(Date.now() / 1000),
@@ -59,7 +59,7 @@ export class AuthService {
 
       const token = jwt.sign(payload, this.jwtSecret, {
         expiresIn: this.jwtExpiryTime,
-      });
+      } as jwt.SignOptions);
 
       return token;
     } catch (error) {

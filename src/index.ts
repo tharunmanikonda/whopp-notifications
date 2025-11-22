@@ -37,17 +37,18 @@ export async function sendDailyMotivation(userId?: string): Promise<void> {
 
   // If no userId provided, try to fetch default user (for backward compatibility)
   let targetUserId = userId;
-  if (!targetUserId) {
-    try {
-      const defaultUser = await userService.getUserByEmail(config.user.email);
-      if (defaultUser) {
-        targetUserId = defaultUser.id;
-        if (isDev) console.log(`Using default user: ${config.user.email}\n`);
-      }
-    } catch (error) {
-      console.warn('Could not fetch default user from Supabase');
-    }
-  }
+  // Note: Default user lookup commented out - userId should be passed from API
+  // if (!targetUserId) {
+  //   try {
+  //     const defaultUser = await userService.getUserByEmail('user@example.com');
+  //     if (defaultUser) {
+  //       targetUserId = defaultUser.id;
+  //       if (isDev) console.log(`Using default user: user@example.com\n`);
+  //     }
+  //   } catch (error) {
+  //     console.warn('Could not fetch default user from Supabase');
+  //   }
+  // }
 
   try {
     // Step 1: Set up health data aggregator with providers
@@ -122,20 +123,20 @@ export async function sendDailyMotivation(userId?: string): Promise<void> {
     if (targetUserId) {
       if (isDev) console.log('💾 Storing health metrics in Supabase...');
       try {
-        const metricsData = {
-          user_id: targetUserId,
-          date: new Date().toISOString().split('T')[0],
-          provider: aggregatedHealthData.primary?.provider || 'unknown',
-          recovery_score: aggregatedHealthData.primary?.recoveryScore,
-          sleep_score: aggregatedHealthData.primary?.sleepScore,
+        const metricsObj: any = {
+          recoveryScore: aggregatedHealthData.primary?.recoveryScore,
+          sleepScore: aggregatedHealthData.primary?.sleepScore,
           strain: aggregatedHealthData.primary?.strain,
-          resting_heart_rate: aggregatedHealthData.primary?.restingHeartRate,
+          restingHeartRate: aggregatedHealthData.primary?.restingHeartRate,
           hrv: aggregatedHealthData.primary?.hrv,
-          data_completeness: aggregatedHealthData.dataCompleteness,
-          raw_data: JSON.stringify(aggregatedHealthData),
         };
 
-        await metricsService.storeMetrics(metricsData as any);
+        await metricsService.storeMetrics(
+          targetUserId,
+          aggregatedHealthData.primary?.provider || 'unknown',
+          metricsObj,
+          aggregatedHealthData
+        );
         if (isDev) console.log('✅ Health metrics stored successfully\n');
       } catch (error: any) {
         console.warn(`Failed to store metrics: ${error.message}`);
@@ -162,18 +163,11 @@ export async function sendDailyMotivation(userId?: string): Promise<void> {
     if (targetUserId) {
       if (isDev) console.log('💾 Storing AI message in Supabase...');
       try {
-        const messageData = {
-          user_id: targetUserId,
-          message: motivationalMessage.message,
-          message_type: 'motivation',
-          providers_used: motivationalMessage.context.providers || [],
-          health_context: JSON.stringify(motivationalMessage.context),
-          delivery_status: 'pending',
-          sent_at: null,
-        };
-
-        const result = await messageService.storeMessage(messageData as any);
-        messageId = result?.id;
+        messageId = await messageService.storeMessage(
+          targetUserId,
+          motivationalMessage,
+          aggregatedHealthData
+        );
         if (isDev) console.log('✅ AI message stored successfully\n');
       } catch (error: any) {
         console.warn(`Failed to store message: ${error.message}`);

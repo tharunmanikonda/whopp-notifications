@@ -223,9 +223,9 @@ app.get('/whoop/callback', async (c) => {
       return c.redirect('http://localhost:5000/onboarding?error=token_exchange_failed');
     }
 
-    const tokenData = await tokenResponse.json();
-    const accessToken = tokenData.access_token;
-    const refreshToken = tokenData.refresh_token;
+    const tokenData = (await tokenResponse.json()) as any;
+    const accessToken = tokenData?.access_token;
+    const refreshToken = tokenData?.refresh_token;
 
     if (!accessToken) {
       console.error('No access token in response:', tokenData);

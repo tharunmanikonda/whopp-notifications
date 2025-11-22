@@ -11,7 +11,7 @@ const server = createServer((req, res) => {
   // Create Fetch API Request
   const init: RequestInit = {
     method: req.method,
-    headers: req.headers as HeadersInit,
+    headers: req.headers as Record<string, string>,
   };
 
   // Handle request body for non-GET/HEAD requests
