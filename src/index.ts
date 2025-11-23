@@ -68,13 +68,21 @@ export async function sendDailyMotivation(userId?: string): Promise<void> {
 
     // Validate all provider connections
     if (isDev) console.log();
-    const providerStatus = await aggregator.validateAllProviders();
-    const activeProviders = aggregator.getProviders();
 
-    if (activeProviders.length === 0) {
-      console.error('No health data providers are connected!');
-      throw new Error('No active health data providers');
+    // Skip provider validation in dev mode - OAuth will provide tokens via frontend
+    if (process.env.NODE_ENV === 'production') {
+      const providerStatus = await aggregator.validateAllProviders();
+      const activeProviders = aggregator.getProviders();
+
+      if (activeProviders.length === 0) {
+        console.error('No health data providers are connected!');
+        throw new Error('No active health data providers');
+      }
+    } else {
+      if (isDev) console.log('⏭️  Skipping provider validation in development mode');
     }
+
+    const activeProviders = aggregator.getProviders();
 
     if (isDev) console.log();
 

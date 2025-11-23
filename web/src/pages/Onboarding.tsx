@@ -148,73 +148,76 @@ interface ProviderAuthFlowProps {
 }
 
 function ProviderAuthFlow({ providerId, onComplete, onCancel }: ProviderAuthFlowProps) {
-  const { connectProvider } = useProviderStore();
   const { token } = useAuthStore();
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [accessToken, setAccessToken] = useState('');
-  const [refreshToken, setRefreshToken] = useState('');
 
-  const providerAuthInstructions: Record<string, { title: string; steps: string[] }> = {
+  const providerInfo: Record<string, { title: string; icon: string; description: string }> = {
     whoop: {
       title: 'Connect Whoop Band',
-      steps: [
-        'Go to your Whoop account settings',
-        'Navigate to "Apps & API" section',
-        'Generate a new API token',
-        'Copy the access token and paste it below',
-      ],
+      icon: '🏃',
+      description: 'Get insights from your Whoop band data',
     },
     fitbit: {
       title: 'Connect Fitbit Device',
-      steps: [
-        'Sign in to your Fitbit account',
-        'Go to Settings > API tokens',
-        'Generate a new token',
-        'Copy the access token and paste it below',
-      ],
+      icon: '⌚',
+      description: 'Sync data from your Fitbit tracker',
     },
     garmin: {
       title: 'Connect Garmin Device',
-      steps: ['Coming soon. Garmin integration is in development.'],
+      icon: '🗺️',
+      description: 'Coming soon. Garmin integration is in development.',
     },
     apple: {
       title: 'Connect Apple Health',
-      steps: ['Coming soon. Apple Health integration is in development.'],
+      icon: '🍎',
+      description: 'Coming soon. Apple Health integration is in development.',
     },
     samsung: {
       title: 'Connect Samsung Health',
-      steps: ['Coming soon. Samsung Health integration is in development.'],
+      icon: '📱',
+      description: 'Coming soon. Samsung Health integration is in development.',
     },
     oura: {
       title: 'Connect Oura Ring',
-      steps: ['Coming soon. Oura Ring integration is in development.'],
+      icon: '💍',
+      description: 'Coming soon. Oura Ring integration is in development.',
     },
   };
 
-  const instructions = providerAuthInstructions[providerId];
+  const provider = providerInfo[providerId];
 
-  const handleConnect = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (!accessToken.trim()) {
-      setError('Please enter an access token');
-      return;
-    }
-
-    if (!token) {
-      setError('Not authenticated');
-      return;
-    }
-
-    setLoading(true);
+  const handleOAuthConnect = async () => {
     try {
-      await connectProvider(token, providerId, accessToken, refreshToken || undefined);
-      onComplete();
-    } catch (err: any) {
-      setError(err.message || 'Failed to connect provider');
+      setLoading(true);
+      setError('');
+
+      // Call the OAuth login endpoint
+      const response = await fetch(`/api/oauth/${providerId}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: token ? undefined : undefined, // Will be obtained from auth context on backend
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to initiate ${providerId} login`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.auth_url) {
+        // Redirect to provider's OAuth page
+        window.location.href = data.auth_url;
+      } else {
+        throw new Error(data.message || 'Failed to get auth URL');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -227,61 +230,37 @@ function ProviderAuthFlow({ providerId, onComplete, onCancel }: ProviderAuthFlow
           ← Back
         </button>
 
-        <h2>{instructions?.title || 'Connect Provider'}</h2>
+        <div className="oauth-connect-container">
+          <div className="oauth-icon">{provider?.icon}</div>
+          <h2>{provider?.title || 'Connect Provider'}</h2>
+          <p className="oauth-description">{provider?.description}</p>
 
-        <div className="auth-instructions">
-          <h3>How to get your access token:</h3>
-          <ol>
-            {instructions?.steps.map((step, index) => (
-              <li key={index}>{step}</li>
-            ))}
-          </ol>
-        </div>
+          {error && <div className="alert alert-error">{error}</div>}
 
-        {error && <div className="alert alert-error">{error}</div>}
-
-        <form onSubmit={handleConnect} className="provider-auth-form">
-          <div className="form-group">
-            <label htmlFor="accessToken">Access Token *</label>
-            <input
-              id="accessToken"
-              type="password"
-              value={accessToken}
-              onChange={(e) => setAccessToken(e.target.value)}
-              placeholder="Paste your access token here"
-              disabled={loading}
-            />
-            <small>Your token is stored securely and never shared</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="refreshToken">Refresh Token (Optional)</label>
-            <input
-              id="refreshToken"
-              type="password"
-              value={refreshToken}
-              onChange={(e) => setRefreshToken(e.target.value)}
-              placeholder="Refresh token (if available)"
-              disabled={loading}
-            />
-            <small>Some providers require this for automatic token renewal</small>
+          <div className="oauth-info">
+            <p>You'll be securely redirected to {providerId === 'whoop' ? 'Whoop' : providerId} to authorize access to your health data.</p>
           </div>
 
           <div className="form-actions">
             <button type="button" className="btn btn-outline" onClick={onCancel} disabled={loading}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleOAuthConnect}
+              disabled={loading}
+            >
               {loading ? (
                 <>
-                  <span className="loading"></span> Connecting...
+                  <span className="loading"></span> Redirecting...
                 </>
               ) : (
-                'Connect'
+                `Connect to ${providerId.charAt(0).toUpperCase() + providerId.slice(1)}`
               )}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

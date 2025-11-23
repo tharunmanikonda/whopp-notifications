@@ -1,6 +1,9 @@
 import { Hono } from 'hono';
+import SupabaseClientService from '../services/supabase-client.js';
+import { AuthService } from '../services/auth-service.js';
 
 const app = new Hono();
+const authService = new AuthService();
 
 /**
  * Available health providers
@@ -155,21 +158,81 @@ app.get('/list', async (c) => {
  */
 app.post('/connect', async (c) => {
   try {
+    // Get authorization token from header
+    const authHeader = c.req.header('Authorization');
+    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+
+    if (!token) {
+      return c.json(
+        {
+          success: false,
+          message: 'Missing authorization token',
+        },
+        401
+      );
+    }
+
+    // Validate token and get user info
+    const userInfo = authService.verifyToken(token);
+    if (!userInfo) {
+      return c.json(
+        {
+          success: false,
+          message: 'Invalid or expired token',
+        },
+        401
+      );
+    }
+
     const body = await c.req.json();
     const { provider_name, access_token, refresh_token } = body;
 
-    // TODO: Validate token
-    // TODO: Store provider credentials securely in database
-    // TODO: Test connection to provider API
+    if (!provider_name || !access_token) {
+      return c.json(
+        {
+          success: false,
+          message: 'Missing provider_name or access_token',
+        },
+        400
+      );
+    }
+
+    // Store tokens in user_health_providers table
+    const supabase = SupabaseClientService.getAdminClient();
+    const { data, error } = await supabase
+      .from('user_health_providers')
+      .insert({
+        user_id: userInfo.userId,
+        provider_name,
+        access_token,
+        refresh_token: refresh_token || null,
+        is_primary: false,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error storing provider tokens:', error);
+      return c.json(
+        {
+          success: false,
+          message: 'Failed to store provider credentials',
+        },
+        500
+      );
+    }
+
+    console.log(`Provider ${provider_name} connected for user ${userInfo.userId}`);
 
     return c.json({
       success: true,
       message: 'Provider connected successfully',
       provider: {
-        id: provider_name,
-        provider_name,
-        is_primary: false,
-        connected_since: new Date().toISOString(),
+        id: data.id,
+        provider_name: data.provider_name,
+        is_primary: data.is_primary,
+        connected_since: data.created_at,
       },
     });
   } catch (error) {
@@ -177,7 +240,7 @@ app.post('/connect', async (c) => {
     return c.json(
       {
         success: false,
-        message: 'Failed to connect provider',
+        message: error instanceof Error ? error.message : 'Failed to connect provider',
       },
       500
     );

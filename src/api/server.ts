@@ -3,6 +3,8 @@ import { cors } from 'hono/cors';
 import authRoutes from './auth.js';
 import providerRoutes from './providers.js';
 import oauthRoutes from './oauth.js';
+import webhookRoutes from './webhooks.js';
+import webhookSubscriptionRoutes from './webhook-subscriptions.js';
 import { config } from '../config/index.js';
 
 /**
@@ -48,6 +50,12 @@ app.route('/api/providers', providerRoutes);
 
 // Mount OAuth routes
 app.route('/api/oauth', oauthRoutes);
+
+// Mount webhook routes (no auth required - signature verified instead)
+app.route('/api', webhookRoutes);
+
+// Mount webhook subscription management routes
+app.route('/api', webhookSubscriptionRoutes);
 
 // 404 handler
 app.notFound((c) => {

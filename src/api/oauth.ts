@@ -118,6 +118,7 @@ app.post('/whoop/login', async (c) => {
     const whoopRedirectUri = config.whoop.redirectUri;
 
     if (!whoopClientId || !whoopRedirectUri) {
+      console.error('WHOOP config missing:', { whoopClientId, whoopRedirectUri });
       return c.json(
         {
           success: false,
@@ -129,13 +130,20 @@ app.post('/whoop/login', async (c) => {
 
     // Generate state for CSRF protection
     const state = generateState();
+    console.log('Generated state:', state.substring(0, 20) + '...');
 
     // Optional: Get user ID from request body (if already logged in)
     const body = await c.req.json().catch(() => ({}));
     const userId = body.user_id;
 
     // Store state in database
-    await storeOAuthState('whoop', state, undefined, userId);
+    try {
+      await storeOAuthState('whoop', state, undefined, userId);
+      console.log('State stored successfully');
+    } catch (stateError) {
+      console.error('Failed to store OAuth state:', stateError);
+      throw stateError;
+    }
 
     // Build WHOOP authorization URL
     const params = new URLSearchParams({
@@ -148,6 +156,8 @@ app.post('/whoop/login', async (c) => {
 
     const authUrl = `https://api.prod.whoop.com/oauth/oauth2/auth?${params.toString()}`;
 
+    console.log('Returning auth URL:', authUrl.substring(0, 100) + '...');
+
     return c.json({
       success: true,
       auth_url: authUrl,
@@ -157,7 +167,7 @@ app.post('/whoop/login', async (c) => {
     return c.json(
       {
         success: false,
-        message: 'Failed to initiate WHOOP login',
+        message: error instanceof Error ? error.message : 'Failed to initiate WHOOP login',
       },
       500
     );
@@ -182,6 +192,8 @@ app.get('/whoop/callback', async (c) => {
     const state = c.req.query('state');
     const error = c.req.query('error');
 
+    console.log('OAuth callback received:', { code: code?.substring(0, 20) + '...', state: state?.substring(0, 20) + '...', error });
+
     // Check for user denial
     if (error) {
       const errorDescription = c.req.query('error_description') || 'User denied access';
@@ -192,6 +204,7 @@ app.get('/whoop/callback', async (c) => {
     }
 
     if (!code || !state) {
+      console.error('Missing code or state:', { code: !!code, state: !!state });
       return c.redirect('http://localhost:5000/onboarding?error=invalid_callback');
     }
 
@@ -232,17 +245,14 @@ app.get('/whoop/callback', async (c) => {
       return c.redirect('http://localhost:5000/onboarding?error=no_access_token');
     }
 
-    // TODO: Store tokens in user_health_providers table
-    // This requires user_id, which we need to get from:
-    // 1. stateData.user_id (if user was logged in)
-    // 2. Or create temporary storage + frontend picks up token
-    // 3. Or use session-based approach
-
-    // For now, store in temporary session/response
-    const successUrl = `http://localhost:5000/onboarding?whoop_token=${accessToken}&whoop_refresh=${refreshToken}&state=${state}`;
+    // Redirect to frontend OAuth callback handler with tokens
+    // Frontend will handle storing tokens in the database
+    const successUrl = `http://localhost:5000/oauth/callback?whoop_token=${encodeURIComponent(accessToken)}&whoop_refresh=${encodeURIComponent(refreshToken || '')}`;
 
     // Clean up used state
     await deleteOAuthState(state);
+
+    console.log('OAuth successful, redirecting to:', successUrl.substring(0, 100) + '...');
 
     return c.redirect(successUrl);
   } catch (error) {
