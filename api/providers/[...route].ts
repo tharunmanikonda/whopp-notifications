@@ -1,7 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import app from '../../src/api/server.js';
 
+function setCorsHeaders(res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age', '600');
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Handle CORS preflight
+  setCorsHeaders(res);
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   // Convert Vercel request to Fetch Request
   const url = new URL(req.url!, `https://${req.headers.host}`);
 
@@ -22,9 +35,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Call Hono app
     const response = await app.fetch(fetchRequest);
 
-    // Copy headers from Hono response
+    // Copy headers from Hono response (but keep CORS headers)
     response.headers.forEach((value, key) => {
-      res.setHeader(key, value);
+      if (!key.toLowerCase().startsWith('access-control')) {
+        res.setHeader(key, value);
+      }
     });
 
     // Set status and send body

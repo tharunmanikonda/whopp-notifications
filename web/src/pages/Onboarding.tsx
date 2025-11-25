@@ -193,7 +193,8 @@ function ProviderAuthFlow({ providerId, onComplete, onCancel }: ProviderAuthFlow
       setError('');
 
       // Call the OAuth login endpoint
-      const response = await fetch(`/api/oauth/${providerId}/login`, {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+      const response = await fetch(`${API_URL}/oauth/${providerId}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

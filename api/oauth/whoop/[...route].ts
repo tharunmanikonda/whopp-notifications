@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import app from '../src/api/server.js';
+import app from '../../../src/api/server.js';
 
 function setCorsHeaders(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -15,7 +15,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  const url = new URL(req.url || '/', `https://${req.headers.host}`);
+  // Convert Vercel request to Fetch Request
+  const url = new URL(req.url!, `https://${req.headers.host}`);
 
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
@@ -31,6 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
 
   try {
+    // Call Hono app
     const response = await app.fetch(fetchRequest);
 
     // Copy headers from Hono response (but keep CORS headers)
@@ -40,6 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     });
 
+    // Set status and send body
     res.status(response.status);
 
     const contentType = response.headers.get('content-type') || '';
@@ -55,6 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({
       success: false,
       message: 'Internal server error',
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 }

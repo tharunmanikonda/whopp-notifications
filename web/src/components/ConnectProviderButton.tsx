@@ -26,7 +26,8 @@ export function ConnectProviderButton({
       setError(null);
 
       // Call the OAuth login endpoint
-      const response = await fetch(`/api/oauth/${provider}/login`, {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+      const response = await fetch(`${API_URL}/oauth/${provider}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
