@@ -1,12 +1,6 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Hono } from 'hono';
-import { handle } from 'hono/vercel';
 import { cors } from 'hono/cors';
-import crypto from 'crypto';
-
-// Re-export types for Vercel
-export const config = {
-  runtime: 'nodejs',
-};
 
 const app = new Hono().basePath('/api');
 
@@ -50,14 +44,9 @@ app.get('/webhooks/whoop', (c) => {
 app.post('/webhooks/whoop', async (c) => {
   try {
     const payload = await c.req.text();
-    const signature = c.req.header('X-WHOOP-Signature');
-    const timestamp = c.req.header('X-WHOOP-Signature-Timestamp');
-
     console.log('📥 WHOOP webhook received');
     console.log('Payload:', payload.substring(0, 200));
 
-    // For now, just acknowledge the webhook
-    // Full processing requires database connection
     return c.json({
       success: true,
       message: 'Webhook received',
@@ -77,4 +66,34 @@ app.all('/*', (c) => {
   }, 404);
 });
 
-export default handle(app);
+// Vercel handler
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Convert Vercel request to fetch Request
+  const url = new URL(req.url || '/', `https://${req.headers.host}`);
+
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (value) {
+      headers.set(key, Array.isArray(value) ? value.join(', ') : value);
+    }
+  }
+
+  const fetchRequest = new Request(url.toString(), {
+    method: req.method,
+    headers,
+    body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
+  });
+
+  // Call Hono app
+  const response = await app.fetch(fetchRequest);
+
+  // Convert Hono response to Vercel response
+  res.status(response.status);
+
+  response.headers.forEach((value, key) => {
+    res.setHeader(key, value);
+  });
+
+  const body = await response.text();
+  res.send(body);
+}
