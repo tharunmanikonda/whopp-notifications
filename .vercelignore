@@ -1,0 +1,21 @@
+# Ignore build output
+dist/
+build/
+
+# Ignore dev/config files
+.env
+.env.local
+*.log
+.git/
+.github/
+
+# Ignore test files
+*.test.ts
+*.spec.ts
+__tests__/
+
+# Ignore misc
+data.txt
+
+# Ignore web folder (deployed separately)
+web/
