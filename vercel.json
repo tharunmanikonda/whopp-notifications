@@ -1,21 +1,15 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/**/*.ts",
-      "use": "@vercel/node"
+  "framework": null,
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "@vercel/node@3"
     }
-  ],
-  "routes": [
+  },
+  "rewrites": [
     {
-      "src": "/",
-      "dest": "/api/index"
-    }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/daily-motivation",
-      "schedule": "0 8 * * *"
+      "source": "/api/(.*)",
+      "destination": "/api/[[...route]]"
     }
   ]
 }
