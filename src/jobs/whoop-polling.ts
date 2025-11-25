@@ -19,7 +19,8 @@
 
 import SupabaseClientService from '../services/supabase-client.js';
 
-const WHOOP_API_BASE = 'https://api.prod.whoop.com/api/v2';
+// WHOOP v2 API base URL (developer endpoint, not /api/v2)
+const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer/v1';
 
 interface WhoopDataPoint {
   id?: string;
@@ -51,7 +52,8 @@ async function fetchCycles(
   endDate: string
 ): Promise<WhoopDataPoint[]> {
   try {
-    const response = await fetch(`${WHOOP_API_BASE}/users/-/cycles?start=${startDate}&end=${endDate}`, {
+    // WHOOP v1 developer API - no /users/-/ prefix needed
+    const response = await fetch(`${WHOOP_API_BASE}/cycle?start=${startDate}&end=${endDate}`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
       },
@@ -83,7 +85,8 @@ async function fetchWorkouts(
   endDate: string
 ): Promise<WhoopDataPoint[]> {
   try {
-    const response = await fetch(`${WHOOP_API_BASE}/users/-/workouts?start=${startDate}&end=${endDate}`, {
+    // WHOOP v1 developer API - /activity/workout endpoint
+    const response = await fetch(`${WHOOP_API_BASE}/activity/workout?start=${startDate}&end=${endDate}`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
       },
@@ -115,7 +118,8 @@ async function fetchSleep(
   endDate: string
 ): Promise<WhoopDataPoint[]> {
   try {
-    const response = await fetch(`${WHOOP_API_BASE}/users/-/sleep?start=${startDate}&end=${endDate}`, {
+    // WHOOP v1 developer API - /activity/sleep endpoint
+    const response = await fetch(`${WHOOP_API_BASE}/activity/sleep?start=${startDate}&end=${endDate}`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
       },
@@ -137,44 +141,54 @@ async function fetchSleep(
 }
 
 /**
- * Store fetched data in database
+ * Store fetched cycle data in database
  *
  * Uses upsert to avoid duplicates:
- * - If data already exists (same user + date + metric type), update it
+ * - If data already exists (same user + provider + date), update it
  * - If new, insert it
+ *
+ * Note: health_metrics table has specific columns for each metric type
  */
-async function storeMetrics(
+async function storeCycleMetrics(
   userId: string,
-  metricType: 'cycles' | 'workouts' | 'sleep',
-  data: WhoopDataPoint[]
+  providerId: string,
+  cycles: WhoopDataPoint[]
 ): Promise<number> {
-  if (data.length === 0) return 0;
+  if (cycles.length === 0) return 0;
 
   const supabase = SupabaseClientService.getAdminClient();
+  let storedCount = 0;
 
-  const metricsToStore = data.map((point) => ({
-    user_id: userId,
-    provider: 'whoop',
-    metric_type: metricType,
-    date: point.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-    external_id: point.id,
-    data: point,
-    synced_at: new Date().toISOString(),
-  }));
+  for (const cycle of cycles) {
+    const date = cycle.created_at?.split('T')[0] || new Date().toISOString().split('T')[0];
+    const score = cycle.score || {};
 
-  const { error, data: inserted } = await supabase
-    .from('user_metrics')
-    .upsert(metricsToStore, {
-      onConflict: 'user_id,provider,metric_type,date',
-    })
-    .select();
+    const metricsToStore = {
+      user_id: userId,
+      provider_id: providerId,
+      date,
+      strain: score.strain,
+      calories: score.kilojoule ? Math.round(score.kilojoule / 4.184) : null, // Convert kJ to kcal
+      average_heart_rate: score.average_heart_rate,
+      max_heart_rate: score.max_heart_rate,
+      raw_data: cycle,
+      synced_at: new Date().toISOString(),
+    };
 
-  if (error) {
-    console.error('Error storing metrics:', error);
-    throw error;
+    const { error } = await supabase
+      .from('health_metrics')
+      .upsert(metricsToStore, {
+        onConflict: 'user_id,provider_id,date',
+      });
+
+    if (error) {
+      console.error('Error storing cycle metric:', error);
+    } else {
+      storedCount++;
+    }
   }
 
-  return inserted?.length || 0;
+  return storedCount;
 }
 
 /**
@@ -203,45 +217,34 @@ async function pollUserData(
 
   try {
     // Calculate date range: last 7 days
+    // WHOOP API requires full ISO timestamps, not just YYYY-MM-DD
     const endDate = new Date();
     const startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const startStr = startDate.toISOString().split('T')[0];
-    const endStr = endDate.toISOString().split('T')[0];
+    const startStr = startDate.toISOString();
+    const endStr = endDate.toISOString();
 
     console.log(`Polling WHOOP data for user ${userId} (${startStr} to ${endStr})`);
 
-    // Fetch data in parallel for efficiency
-    const [cycles, workouts, sleep] = await Promise.all([
-      fetchCycles(accessToken, startStr, endStr).catch((error) => {
-        result.errors.push(`Cycles: ${error.message}`);
-        return [];
-      }),
-      fetchWorkouts(accessToken, startStr, endStr).catch((error) => {
-        result.errors.push(`Workouts: ${error.message}`);
-        return [];
-      }),
-      fetchSleep(accessToken, startStr, endStr).catch((error) => {
-        result.errors.push(`Sleep: ${error.message}`);
-        return [];
-      }),
-    ]);
+    // Fetch cycles - this is the main data we get from WHOOP v1 API
+    // (workout and sleep endpoints return 404, may need different scopes)
+    const cycles = await fetchCycles(accessToken, startStr, endStr).catch((error) => {
+      result.errors.push(`Cycles: ${error.message}`);
+      return [];
+    });
 
-    // Store data
-    result.cycles_fetched = await storeMetrics(userId, 'cycles', cycles).catch((error) => {
+    console.log(`Fetched ${cycles.length} cycles for user ${userId}`);
+
+    // Store cycle data
+    result.cycles_fetched = await storeCycleMetrics(userId, providerId, cycles).catch((error) => {
       result.errors.push(`Store cycles: ${error.message}`);
       return 0;
     });
 
-    result.workouts_fetched = await storeMetrics(userId, 'workouts', workouts).catch((error) => {
-      result.errors.push(`Store workouts: ${error.message}`);
-      return 0;
-    });
-
-    result.sleep_fetched = await storeMetrics(userId, 'sleep', sleep).catch((error) => {
-      result.errors.push(`Store sleep: ${error.message}`);
-      return 0;
-    });
+    // Note: workout and sleep fetching disabled - they return 404
+    // May need to check scopes or use different API version
+    result.workouts_fetched = 0;
+    result.sleep_fetched = 0;
 
     // Update provider's last_polled_at timestamp
     const supabase = SupabaseClientService.getAdminClient();
@@ -289,7 +292,7 @@ export async function runWhoopBackupPolling(): Promise<{
     // Get all active WHOOP providers
     const { data: providers, error } = await supabase
       .from('user_health_providers')
-      .select('id, user_id, access_token, external_user_id')
+      .select('id, user_id, access_token')
       .eq('provider_name', 'whoop')
       .eq('is_active', true);
 

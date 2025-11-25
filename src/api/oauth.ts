@@ -216,18 +216,21 @@ app.get('/whoop/callback', async (c) => {
     }
 
     // Exchange authorization code for tokens
+    // WHOOP requires x-www-form-urlencoded, NOT JSON
+    const tokenBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      client_id: config.whoop.clientId!,
+      client_secret: config.whoop.clientSecret!,
+      redirect_uri: config.whoop.redirectUri!,
+    });
+
     const tokenResponse = await fetch('https://api.prod.whoop.com/oauth/oauth2/token', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        code,
-        client_id: config.whoop.clientId,
-        client_secret: config.whoop.clientSecret,
-        redirect_uri: config.whoop.redirectUri,
-      }),
+      body: tokenBody.toString(),
     });
 
     if (!tokenResponse.ok) {

@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Onboarding from './pages/Onboarding';
 import Dashboard from './pages/Dashboard';
+import Devices from './pages/Devices';
 import OAuthCallback from './pages/OAuthCallback';
 
 export default function App() {
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/oauth/callback" element={<OAuthCallback />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/devices" element={<Devices />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

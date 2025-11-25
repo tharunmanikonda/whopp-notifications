@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useProviderStore } from '../store/providerStore';
+import Navbar from '../components/Navbar';
 import axios from 'axios';
 import '../styles/dashboard.css';
 
@@ -37,7 +38,7 @@ interface DashboardData {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, token, logout } = useAuthStore();
+  const { user, token } = useAuthStore();
   const { connectedProviders, fetchConnectedProviders } = useProviderStore();
 
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -77,11 +78,6 @@ export default function Dashboard() {
     fetchConnectedProviders(token);
   }, [user, token, navigate]);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
   const getPriorityColor = (priority: string): string => {
     const colors: Record<string, string> = {
       info: '#3b82f6',
@@ -113,12 +109,10 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-container">
+      <Navbar />
       <header className="dashboard-header">
         <div className="header-content">
           <h1>Dashboard</h1>
-          <button className="logout-btn" onClick={handleLogout}>
-            Logout
-          </button>
         </div>
         {user && <p className="welcome-text">Welcome back, {user.full_name}!</p>}
       </header>

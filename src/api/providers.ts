@@ -110,12 +110,43 @@ app.get('/available', (c) => {
  */
 app.get('/list', async (c) => {
   try {
-    // TODO: Implement database query to fetch user's connected providers
-    // For now, return empty list
+    // Get authorization token from header
+    const authHeader = c.req.header('Authorization');
+    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+
+    if (!token) {
+      return c.json({ success: false, message: 'Missing authorization token' }, 401);
+    }
+
+    // Validate token and get user info
+    const userInfo = authService.verifyToken(token);
+    if (!userInfo) {
+      return c.json({ success: false, message: 'Invalid or expired token' }, 401);
+    }
+
+    // Query database for user's connected providers
+    const supabase = SupabaseClientService.getAdminClient();
+    const { data: providers, error } = await supabase
+      .from('user_health_providers')
+      .select('id, provider_name, provider_type, is_primary, is_active, connected_at, last_synced_at')
+      .eq('user_id', userInfo.userId)
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('Error fetching providers:', error);
+      return c.json({ success: false, message: 'Failed to fetch providers' }, 500);
+    }
+
     return c.json({
       success: true,
       providers: {
-        connected: [],
+        connected: providers.map(p => ({
+          id: p.id,
+          provider_name: p.provider_name,
+          is_primary: p.is_primary,
+          connected_since: p.connected_at,
+          last_synced: p.last_synced_at,
+        })),
       },
     });
   } catch (error) {
@@ -204,6 +235,7 @@ app.post('/connect', async (c) => {
       .insert({
         user_id: userInfo.userId,
         provider_name,
+        provider_type: provider_name, // Same as provider_name for now (whoop, fitbit, etc.)
         access_token,
         refresh_token: refresh_token || null,
         is_primary: false,
