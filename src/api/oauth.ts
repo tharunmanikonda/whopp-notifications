@@ -192,7 +192,12 @@ app.get('/whoop/callback', async (c) => {
     const state = c.req.query('state');
     const error = c.req.query('error');
 
-    console.log('OAuth callback received:', { code: code?.substring(0, 20) + '...', state: state?.substring(0, 20) + '...', error });
+    // Detect environment from request host - use prod URL if not localhost
+    const host = c.req.header('host') || '';
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+    const frontendUrl = isLocalhost ? 'http://localhost:5000' : 'https://web-tharun-dev.vercel.app';
+
+    console.log('OAuth callback received:', { code: code?.substring(0, 20) + '...', state: state?.substring(0, 20) + '...', error, host, frontendUrl });
 
     // Check for user denial
     if (error) {
@@ -200,19 +205,19 @@ app.get('/whoop/callback', async (c) => {
       console.error('WHOOP OAuth error:', error, errorDescription);
 
       // Redirect to frontend with error
-      return c.redirect(`http://localhost:5000/onboarding?error=whoop_denied&message=${encodeURIComponent(errorDescription)}`);
+      return c.redirect(`${frontendUrl}/onboarding?error=whoop_denied&message=${encodeURIComponent(errorDescription)}`);
     }
 
     if (!code || !state) {
       console.error('Missing code or state:', { code: !!code, state: !!state });
-      return c.redirect('http://localhost:5000/onboarding?error=invalid_callback');
+      return c.redirect(`${frontendUrl}/onboarding?error=invalid_callback`);
     }
 
     // Validate state parameter
     const stateData = await validateOAuthState('whoop', state);
     if (!stateData) {
       console.error('Invalid or expired OAuth state');
-      return c.redirect('http://localhost:5000/onboarding?error=invalid_state');
+      return c.redirect(`${frontendUrl}/onboarding?error=invalid_state`);
     }
 
     // Exchange authorization code for tokens
@@ -236,7 +241,7 @@ app.get('/whoop/callback', async (c) => {
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.json();
       console.error('Token exchange failed:', errorData);
-      return c.redirect('http://localhost:5000/onboarding?error=token_exchange_failed');
+      return c.redirect(`${frontendUrl}/onboarding?error=token_exchange_failed`);
     }
 
     const tokenData = (await tokenResponse.json()) as any;
@@ -245,12 +250,12 @@ app.get('/whoop/callback', async (c) => {
 
     if (!accessToken) {
       console.error('No access token in response:', tokenData);
-      return c.redirect('http://localhost:5000/onboarding?error=no_access_token');
+      return c.redirect(`${frontendUrl}/onboarding?error=no_access_token`);
     }
 
     // Redirect to frontend OAuth callback handler with tokens
     // Frontend will handle storing tokens in the database
-    const successUrl = `http://localhost:5000/oauth/callback?whoop_token=${encodeURIComponent(accessToken)}&whoop_refresh=${encodeURIComponent(refreshToken || '')}`;
+    const successUrl = `${frontendUrl}/oauth/callback?whoop_token=${encodeURIComponent(accessToken)}&whoop_refresh=${encodeURIComponent(refreshToken || '')}`;
 
     // Clean up used state
     await deleteOAuthState(state);
@@ -260,7 +265,9 @@ app.get('/whoop/callback', async (c) => {
     return c.redirect(successUrl);
   } catch (error) {
     console.error('WHOOP callback error:', error);
-    return c.redirect('http://localhost:5000/onboarding?error=callback_error');
+    // Fallback to prod URL on error since we can't access frontendUrl here
+    const fallbackUrl = 'https://web-tharun-dev.vercel.app';
+    return c.redirect(`${fallbackUrl}/onboarding?error=callback_error`);
   }
 });
 
