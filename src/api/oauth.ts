@@ -271,4 +271,220 @@ app.get('/whoop/callback', async (c) => {
   }
 });
 
+// =====================================================
+// FITBIT OAUTH FLOW
+// =====================================================
+
+/**
+ * Helper: Generate PKCE code challenge from verifier
+ */
+function generateCodeChallenge(verifier: string): string {
+  const hash = crypto.createHash('sha256').update(verifier).digest();
+  return hash.toString('base64url');
+}
+
+/**
+ * POST /oauth/fitbit/login
+ * Initiate Fitbit OAuth flow with PKCE
+ *
+ * Body (optional):
+ * {
+ *   "user_id": "uuid" (if user already logged in)
+ * }
+ *
+ * Response:
+ * {
+ *   "success": true,
+ *   "auth_url": "https://www.fitbit.com/oauth2/authorize?..."
+ * }
+ */
+app.post('/fitbit/login', async (c) => {
+  try {
+    const fitbitClientId = config.fitbit.clientId;
+    const fitbitRedirectUri = config.fitbit.redirectUri;
+
+    if (!fitbitClientId || !fitbitRedirectUri) {
+      console.error('Fitbit config missing:', { fitbitClientId, fitbitRedirectUri });
+      return c.json(
+        {
+          success: false,
+          message: 'Fitbit OAuth credentials not configured',
+        },
+        500
+      );
+    }
+
+    // Generate state for CSRF protection
+    const state = generateState();
+    // Generate PKCE code verifier and challenge
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = generateCodeChallenge(codeVerifier);
+
+    console.log('Generated Fitbit OAuth state:', state.substring(0, 20) + '...');
+
+    // Optional: Get user ID from request body (if already logged in)
+    const body = await c.req.json().catch(() => ({}));
+    const userId = body.user_id;
+
+    // Store state and code_verifier in database
+    try {
+      await storeOAuthState('fitbit', state, codeVerifier, userId);
+      console.log('Fitbit OAuth state stored successfully');
+    } catch (stateError) {
+      console.error('Failed to store Fitbit OAuth state:', stateError);
+      throw stateError;
+    }
+
+    // Build Fitbit authorization URL
+    // Scopes: Full tracking as requested
+    const scopes = [
+      'activity',
+      'heartrate',
+      'sleep',
+      'profile',
+      'settings',
+      'weight',
+      'nutrition',
+      'oxygen_saturation',
+      'respiratory_rate',
+      'temperature',
+    ].join(' ');
+
+    const params = new URLSearchParams({
+      client_id: fitbitClientId,
+      redirect_uri: fitbitRedirectUri,
+      response_type: 'code',
+      scope: scopes,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+
+    const authUrl = `https://www.fitbit.com/oauth2/authorize?${params.toString()}`;
+
+    console.log('Returning Fitbit auth URL:', authUrl.substring(0, 100) + '...');
+
+    return c.json({
+      success: true,
+      auth_url: authUrl,
+    });
+  } catch (error) {
+    console.error('Fitbit login error:', error);
+    return c.json(
+      {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to initiate Fitbit login',
+      },
+      500
+    );
+  }
+});
+
+/**
+ * GET /oauth/fitbit/callback
+ * Handle Fitbit OAuth callback
+ *
+ * Query params:
+ * - code: Authorization code from Fitbit
+ * - state: State parameter for CSRF validation
+ *
+ * Response:
+ * Redirects to frontend with tokens
+ */
+app.get('/fitbit/callback', async (c) => {
+  try {
+    const code = c.req.query('code');
+    const state = c.req.query('state');
+    const error = c.req.query('error');
+
+    // Detect environment from request host
+    const host = c.req.header('host') || '';
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+    const frontendUrl = isLocalhost ? 'http://localhost:5000' : 'https://web-tharun-dev.vercel.app';
+
+    console.log('Fitbit OAuth callback received:', {
+      code: code?.substring(0, 20) + '...',
+      state: state?.substring(0, 20) + '...',
+      error,
+      host
+    });
+
+    // Check for user denial
+    if (error) {
+      const errorDescription = c.req.query('error_description') || 'User denied access';
+      console.error('Fitbit OAuth error:', error, errorDescription);
+      return c.redirect(`${frontendUrl}/onboarding?error=fitbit_denied&message=${encodeURIComponent(errorDescription)}`);
+    }
+
+    if (!code || !state) {
+      console.error('Missing code or state:', { code: !!code, state: !!state });
+      return c.redirect(`${frontendUrl}/onboarding?error=invalid_callback`);
+    }
+
+    // Validate state parameter and get code_verifier for PKCE
+    const stateData = await validateOAuthState('fitbit', state);
+    if (!stateData) {
+      console.error('Invalid or expired Fitbit OAuth state');
+      return c.redirect(`${frontendUrl}/onboarding?error=invalid_state`);
+    }
+
+    const codeVerifier = stateData.code_verifier;
+    if (!codeVerifier) {
+      console.error('Missing PKCE code_verifier');
+      return c.redirect(`${frontendUrl}/onboarding?error=missing_code_verifier`);
+    }
+
+    // Exchange authorization code for tokens
+    // Fitbit uses Basic auth for client credentials
+    const basicAuth = Buffer.from(`${config.fitbit.clientId}:${config.fitbit.clientSecret}`).toString('base64');
+
+    const tokenBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: config.fitbit.redirectUri!,
+      code_verifier: codeVerifier,
+    });
+
+    const tokenResponse = await fetch('https://api.fitbit.com/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basicAuth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: tokenBody.toString(),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.json();
+      console.error('Fitbit token exchange failed:', errorData);
+      return c.redirect(`${frontendUrl}/onboarding?error=token_exchange_failed`);
+    }
+
+    const tokenData = (await tokenResponse.json()) as any;
+    const accessToken = tokenData?.access_token;
+    const refreshToken = tokenData?.refresh_token;
+    const fitbitUserId = tokenData?.user_id; // Fitbit returns user_id in token response
+
+    if (!accessToken) {
+      console.error('No access token in Fitbit response:', tokenData);
+      return c.redirect(`${frontendUrl}/onboarding?error=no_access_token`);
+    }
+
+    // Redirect to frontend OAuth callback handler with tokens
+    // Include provider=fitbit to distinguish from WHOOP
+    const successUrl = `${frontendUrl}/oauth/callback?provider=fitbit&fitbit_token=${encodeURIComponent(accessToken)}&fitbit_refresh=${encodeURIComponent(refreshToken || '')}&fitbit_user_id=${encodeURIComponent(fitbitUserId || '')}`;
+
+    // Clean up used state
+    await deleteOAuthState(state);
+
+    console.log('Fitbit OAuth successful, redirecting to:', successUrl.substring(0, 100) + '...');
+
+    return c.redirect(successUrl);
+  } catch (error) {
+    console.error('Fitbit callback error:', error);
+    const fallbackUrl = 'https://web-tharun-dev.vercel.app';
+    return c.redirect(`${fallbackUrl}/onboarding?error=callback_error`);
+  }
+});
+
 export default app;

@@ -12,6 +12,12 @@ export const config: Config = {
     accessToken: process.env.WHOOP_ACCESS_TOKEN || '',
     refreshToken: process.env.WHOOP_REFRESH_TOKEN || '',
   },
+  fitbit: {
+    clientId: process.env.FITBIT_CLIENT_ID || '',
+    clientSecret: process.env.FITBIT_CLIENT_SECRET || '',
+    // Redirect URI must match exactly what's registered in Fitbit Developer Dashboard
+    redirectUri: process.env.FITBIT_REDIRECT_URI || 'http://localhost:5001/api/oauth/fitbit/callback',
+  },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
   },

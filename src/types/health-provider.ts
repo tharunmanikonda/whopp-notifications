@@ -32,6 +32,17 @@ export interface HealthMetrics {
   stressLevel?: number; // 0-100%
   spO2?: number; // Blood Oxygen %
 
+  // Respiratory
+  respiratoryRate?: number; // breaths per minute
+
+  // Body Composition
+  weight?: number; // kg
+  bmi?: number;
+  bodyFat?: number; // percentage
+
+  // Temperature
+  skinTemperature?: number; // relative deviation from baseline
+
   // Metadata
   timestamp: string; // ISO 8601
   provider: string; // 'whoop', 'fitbit', 'garmin', etc.

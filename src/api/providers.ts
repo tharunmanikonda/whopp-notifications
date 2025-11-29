@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import SupabaseClientService from '../services/supabase-client.js';
 import { AuthService } from '../services/auth-service.js';
+import { runWhoopPollingForUser } from '../jobs/whoop-polling.js';
+import { runFitbitPollingForUser } from '../jobs/fitbit-polling.js';
 
 const app = new Hono();
 const authService = new AuthService();
@@ -366,6 +368,101 @@ app.post('/set-primary', async (c) => {
       {
         success: false,
         message: 'Failed to set primary provider',
+      },
+      500
+    );
+  }
+});
+
+/**
+ * POST /providers/sync
+ * Manually trigger a data sync for a specific provider (requires auth)
+ *
+ * Headers:
+ * Authorization: Bearer <token>
+ *
+ * Body:
+ * {
+ *   "provider_name": "whoop" | "fitbit"
+ * }
+ *
+ * Response:
+ * {
+ *   "success": true,
+ *   "message": "Sync completed",
+ *   "result": {
+ *     "days_fetched": 7,
+ *     "metrics_stored": 7,
+ *     ...
+ *   }
+ * }
+ */
+app.post('/sync', async (c) => {
+  try {
+    // Get authorization token from header
+    const authHeader = c.req.header('Authorization');
+    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+
+    if (!token) {
+      return c.json({ success: false, message: 'Missing authorization token' }, 401);
+    }
+
+    // Validate token and get user info
+    const userInfo = authService.verifyToken(token);
+    if (!userInfo) {
+      return c.json({ success: false, message: 'Invalid or expired token' }, 401);
+    }
+
+    const body = await c.req.json();
+    const { provider_name } = body;
+
+    if (!provider_name) {
+      return c.json({ success: false, message: 'Missing provider_name' }, 400);
+    }
+
+    // Check if user has this provider connected
+    const supabase = SupabaseClientService.getAdminClient();
+    const { data: provider, error: providerError } = await supabase
+      .from('user_health_providers')
+      .select('id')
+      .eq('user_id', userInfo.userId)
+      .eq('provider_name', provider_name)
+      .eq('is_active', true)
+      .single();
+
+    if (providerError || !provider) {
+      return c.json(
+        { success: false, message: `Provider ${provider_name} not connected` },
+        404
+      );
+    }
+
+    let result;
+    switch (provider_name) {
+      case 'whoop':
+        result = await runWhoopPollingForUser(userInfo.userId);
+        break;
+      case 'fitbit':
+        result = await runFitbitPollingForUser(userInfo.userId);
+        break;
+      default:
+        return c.json(
+          { success: false, message: `Sync not supported for provider: ${provider_name}` },
+          400
+        );
+    }
+
+    return c.json({
+      success: true,
+      message: 'Sync completed',
+      result,
+    });
+  } catch (error) {
+    console.error('Error syncing provider:', error);
+    return c.json(
+      {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to sync provider',
       },
       500
     );

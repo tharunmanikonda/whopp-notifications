@@ -134,6 +134,11 @@ export interface Config {
     accessToken: string;
     refreshToken: string;
   };
+  fitbit: {
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+  };
   gemini: {
     apiKey: string;
   };
@@ -152,4 +157,120 @@ export interface Config {
     anonKey: string;
     serviceRoleKey: string;
   };
+}
+
+// Fitbit API Response Types
+export interface FitbitActivitySummary {
+  activities: any[];
+  goals: {
+    activeMinutes: number;
+    caloriesOut: number;
+    distance: number;
+    steps: number;
+  };
+  summary: {
+    activeScore: number;
+    activityCalories: number;
+    caloriesBMR: number;
+    caloriesOut: number;
+    distances: Array<{ activity: string; distance: number }>;
+    fairlyActiveMinutes: number;
+    lightlyActiveMinutes: number;
+    marginalCalories: number;
+    sedentaryMinutes: number;
+    steps: number;
+    veryActiveMinutes: number;
+  };
+}
+
+export interface FitbitSleepLog {
+  sleep: Array<{
+    dateOfSleep: string;
+    duration: number;
+    efficiency: number;
+    isMainSleep: boolean;
+    levels: {
+      summary: {
+        deep: { count: number; minutes: number };
+        light: { count: number; minutes: number };
+        rem: { count: number; minutes: number };
+        wake: { count: number; minutes: number };
+      };
+    };
+    minutesAsleep: number;
+    minutesAwake: number;
+    startTime: string;
+    endTime: string;
+  }>;
+  summary: {
+    totalMinutesAsleep: number;
+    totalSleepRecords: number;
+    totalTimeInBed: number;
+  };
+}
+
+export interface FitbitHeartRate {
+  'activities-heart': Array<{
+    dateTime: string;
+    value: {
+      customHeartRateZones: any[];
+      heartRateZones: Array<{
+        caloriesOut: number;
+        max: number;
+        min: number;
+        minutes: number;
+        name: string;
+      }>;
+      restingHeartRate: number;
+    };
+  }>;
+}
+
+export interface FitbitHRV {
+  hrv: Array<{
+    dateTime: string;
+    value: {
+      dailyRmssd: number;
+      deepRmssd: number;
+    };
+  }>;
+}
+
+export interface FitbitSpO2 {
+  dateTime: string;
+  value: {
+    avg: number;
+    min: number;
+    max: number;
+  };
+}
+
+export interface FitbitWeight {
+  weight: Array<{
+    bmi: number;
+    date: string;
+    fat: number;
+    logId: number;
+    source: string;
+    time: string;
+    weight: number;
+  }>;
+}
+
+export interface FitbitBreathingRate {
+  br: Array<{
+    dateTime: string;
+    value: {
+      breathingRate: number;
+    };
+  }>;
+}
+
+export interface FitbitTemperature {
+  tempSkin: Array<{
+    dateTime: string;
+    value: {
+      nightlyRelative: number;
+    };
+  }>;
 }
