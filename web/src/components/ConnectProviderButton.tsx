@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import '../styles/connect-provider.css';
 
 interface ConnectProviderButtonProps {
   provider: 'whoop' | 'fitbit' | 'oura' | 'garmin' | 'apple' | 'samsung';
@@ -76,21 +75,41 @@ export function ConnectProviderButton({
   };
 
   return (
-    <div className="connect-provider-button">
+    <div className="w-full">
       <button
         onClick={isConnected ? handleDisconnect : handleConnect}
         disabled={isLoading}
-        className={`provider-btn ${isConnected ? 'connected' : 'disconnected'} ${isLoading ? 'loading' : ''}`}
+        className={`w-full flex items-center justify-between px-5 py-4 rounded-xl border transition-all duration-200 ${
+          isConnected
+            ? 'bg-emerald-500/10 border-emerald-500 text-emerald-300'
+            : 'bg-slate-800 border-slate-700 text-slate-200 hover:border-blue-500 hover:bg-slate-700/50'
+        } ${isLoading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
       >
-        <span className="provider-icon">{icon}</span>
-        <span className="provider-name">{name}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">{icon}</span>
+          <span className="font-medium">{name}</span>
+        </div>
 
-        {isLoading && <span className="spinner"></span>}
-        {isConnected && <span className="connected-badge">✓</span>}
-        {!isConnected && !isLoading && <span className="connect-arrow">→</span>}
+        <div className="flex items-center gap-2">
+          {isLoading && (
+            <div className="w-5 h-5 border-2 border-slate-500 border-t-blue-500 rounded-full animate-spin"></div>
+          )}
+          {isConnected && (
+            <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 text-xs font-semibold rounded">
+              ✓ Connected
+            </span>
+          )}
+          {!isConnected && !isLoading && (
+            <span className="text-blue-400 text-lg">→</span>
+          )}
+        </div>
       </button>
 
-      {error && <div className="error-message">{error}</div>}
+      {error && (
+        <div className="mt-2 p-3 bg-red-500/10 border border-red-500 rounded-lg text-red-300 text-sm">
+          {error}
+        </div>
+      )}
     </div>
   );
 }

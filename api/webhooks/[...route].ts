@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import app from '../src/api/server.js';
+import app from '../../src/api/server.js';
 
 function setCorsHeaders(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-WHOOP-Signature, X-WHOOP-Signature-Timestamp');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-WHOOP-Signature, X-WHOOP-Signature-Timestamp');
   res.setHeader('Access-Control-Max-Age', '600');
 }
 
@@ -25,16 +25,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // For webhook endpoints, we need to pass the raw body for signature verification
-  // For other endpoints, we can use JSON
+  // For webhooks, pass raw body string for signature verification
   let body: string | undefined;
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    if (url.pathname.includes('/webhooks/')) {
-      // For webhooks, pass raw body string
-      body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    } else {
-      body = JSON.stringify(req.body);
-    }
+    body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
   }
 
   const fetchRequest = new Request(url.toString(), {
@@ -66,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.send(text);
     }
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('Webhook API Error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -74,12 +68,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 }
-
-// Disable body parsing for webhooks to get raw body
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '1mb',
-    },
-  },
-};

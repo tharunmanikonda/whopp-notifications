@@ -66,32 +66,39 @@ export default function Devices() {
   };
 
   return (
-    <div style={styles.container}>
+    <div className="min-h-screen bg-slate-900">
       <Navbar />
 
-      <main style={styles.main}>
-        <h1 style={styles.title}>Connected Devices</h1>
-        <p style={styles.subtitle}>Manage your health data sources</p>
+      <main className="max-w-6xl mx-auto px-6 py-8">
+        <h1 className="text-3xl font-bold text-slate-50 mb-2">Connected Devices</h1>
+        <p className="text-slate-400 mb-8">Manage your health data sources</p>
 
         {/* Connected Providers */}
         {connectedProviders.length > 0 && (
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>Your Devices</h2>
-            <div style={styles.grid}>
+          <section className="mb-12">
+            <h2 className="text-xl font-semibold text-slate-200 mb-4">Your Devices</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {connectedProviders.map((provider) => (
-                <div key={provider.id} style={styles.card}>
-                  <div style={styles.cardHeader}>
-                    <span style={styles.icon}>{getProviderIcon(provider.provider_name)}</span>
-                    <span style={styles.connectedBadge}>Connected</span>
+                <div
+                  key={provider.id}
+                  className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-emerald-500 transition-colors"
+                >
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-3xl">{getProviderIcon(provider.provider_name)}</span>
+                    <span className="px-3 py-1 bg-emerald-500 text-white text-xs font-medium rounded-full">
+                      Connected
+                    </span>
                   </div>
-                  <h3 style={styles.cardTitle}>
+                  <h3 className="text-lg font-semibold text-slate-50 mb-2">
                     {provider.provider_name.charAt(0).toUpperCase() + provider.provider_name.slice(1)}
                   </h3>
-                  <p style={styles.cardMeta}>
+                  <p className="text-slate-500 text-sm">
                     Connected: {new Date(provider.connected_since).toLocaleDateString()}
                   </p>
                   {provider.is_primary && (
-                    <span style={styles.primaryBadge}>Primary Source</span>
+                    <span className="inline-block mt-3 px-3 py-1 bg-blue-500 text-white text-xs font-medium rounded-full">
+                      Primary Source
+                    </span>
                   )}
                 </div>
               ))}
@@ -100,35 +107,46 @@ export default function Devices() {
         )}
 
         {/* Available Providers */}
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>
+        <section className="mb-12">
+          <h2 className="text-xl font-semibold text-slate-200 mb-4">
             {connectedProviders.length > 0 ? 'Add More Devices' : 'Connect a Device'}
           </h2>
-          <div style={styles.grid}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {availableProviders
               .filter(p => !isConnected(p.id))
               .map((provider) => (
-                <div key={provider.id} style={styles.card}>
-                  <div style={styles.cardHeader}>
-                    <span style={styles.icon}>{provider.icon}</span>
+                <div
+                  key={provider.id}
+                  className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-blue-500 transition-colors"
+                >
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-3xl">{provider.icon}</span>
                     {provider.status === 'coming_soon' && (
-                      <span style={styles.comingSoonBadge}>Coming Soon</span>
+                      <span className="px-3 py-1 bg-indigo-500 text-white text-xs font-medium rounded-full">
+                        Coming Soon
+                      </span>
                     )}
                   </div>
-                  <h3 style={styles.cardTitle}>{provider.name}</h3>
-                  <p style={styles.cardDescription}>{provider.description}</p>
-                  <div style={styles.metrics}>
+                  <h3 className="text-lg font-semibold text-slate-50 mb-2">{provider.name}</h3>
+                  <p className="text-slate-400 text-sm mb-4">{provider.description}</p>
+                  <div className="flex flex-wrap gap-2 mb-4">
                     {provider.metrics.map((metric, idx) => (
-                      <span key={idx} style={styles.metricTag}>{metric}</span>
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1 bg-slate-700 text-slate-400 text-xs rounded"
+                      >
+                        {metric}
+                      </span>
                     ))}
                   </div>
                   <button
-                    style={{
-                      ...styles.connectBtn,
-                      ...(provider.status === 'coming_soon' ? styles.disabledBtn : {}),
-                    }}
                     onClick={() => handleConnect(provider.id)}
                     disabled={provider.status === 'coming_soon' || connectingProvider === provider.id}
+                    className={`w-full py-3 rounded-lg text-sm font-medium transition-colors ${
+                      provider.status === 'coming_soon'
+                        ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
+                        : 'bg-blue-500 text-white hover:bg-blue-600'
+                    }`}
                   >
                     {connectingProvider === provider.id ? 'Connecting...' : 'Connect'}
                   </button>
@@ -137,9 +155,9 @@ export default function Devices() {
           </div>
         </section>
 
-        {/* Empty State */}
+        {/* Loading State */}
         {loading && (
-          <div style={styles.loading}>
+          <div className="text-center text-slate-400 py-12">
             <p>Loading devices...</p>
           </div>
         )}
@@ -147,128 +165,3 @@ export default function Devices() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    minHeight: '100vh',
-    backgroundColor: '#0f172a',
-  },
-  main: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '32px 24px',
-  },
-  title: {
-    fontSize: '32px',
-    fontWeight: 'bold',
-    color: '#f8fafc',
-    marginBottom: '8px',
-  },
-  subtitle: {
-    color: '#94a3b8',
-    marginBottom: '32px',
-  },
-  section: {
-    marginBottom: '48px',
-  },
-  sectionTitle: {
-    fontSize: '20px',
-    fontWeight: '600',
-    color: '#e2e8f0',
-    marginBottom: '16px',
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: '20px',
-  },
-  card: {
-    backgroundColor: '#1e293b',
-    borderRadius: '12px',
-    padding: '24px',
-    border: '1px solid #334155',
-  },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '16px',
-  },
-  icon: {
-    fontSize: '32px',
-  },
-  connectedBadge: {
-    backgroundColor: '#10b981',
-    color: 'white',
-    padding: '4px 12px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: '500',
-  },
-  comingSoonBadge: {
-    backgroundColor: '#6366f1',
-    color: 'white',
-    padding: '4px 12px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: '500',
-  },
-  primaryBadge: {
-    display: 'inline-block',
-    backgroundColor: '#3b82f6',
-    color: 'white',
-    padding: '4px 12px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: '500',
-    marginTop: '12px',
-  },
-  cardTitle: {
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#f8fafc',
-    marginBottom: '8px',
-  },
-  cardDescription: {
-    color: '#94a3b8',
-    fontSize: '14px',
-    marginBottom: '16px',
-  },
-  cardMeta: {
-    color: '#64748b',
-    fontSize: '13px',
-  },
-  metrics: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '8px',
-    marginBottom: '16px',
-  },
-  metricTag: {
-    backgroundColor: '#334155',
-    color: '#94a3b8',
-    padding: '4px 10px',
-    borderRadius: '6px',
-    fontSize: '12px',
-  },
-  connectBtn: {
-    width: '100%',
-    padding: '12px',
-    backgroundColor: '#3b82f6',
-    border: 'none',
-    borderRadius: '8px',
-    color: 'white',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer',
-  },
-  disabledBtn: {
-    backgroundColor: '#475569',
-    cursor: 'not-allowed',
-  },
-  loading: {
-    textAlign: 'center',
-    color: '#94a3b8',
-    padding: '48px',
-  },
-};

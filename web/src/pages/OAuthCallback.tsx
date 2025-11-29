@@ -69,11 +69,11 @@ export default function OAuthCallback() {
 
   if (loading) {
     return (
-      <div style={styles.container}>
-        <div style={styles.content}>
-          <div style={styles.spinner}></div>
-          <h2>Completing OAuth Flow...</h2>
-          <p>Please wait while we authenticate you with WHOOP</p>
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin mx-auto mb-6"></div>
+          <h2 className="text-xl font-semibold text-white mb-2">Completing OAuth Flow...</h2>
+          <p className="text-slate-400">Please wait while we authenticate you with WHOOP</p>
         </div>
       </div>
     );
@@ -81,12 +81,12 @@ export default function OAuthCallback() {
 
   if (error) {
     return (
-      <div style={styles.container}>
-        <div style={styles.content}>
-          <div style={styles.errorIcon}>❌</div>
-          <h2>Authentication Failed</h2>
-          <p style={styles.error}>{error}</p>
-          <p style={styles.redirect}>Redirecting back...</p>
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-4">❌</div>
+          <h2 className="text-xl font-semibold text-white mb-2">Authentication Failed</h2>
+          <p className="text-red-400 mb-4">{error}</p>
+          <p className="text-slate-500 text-sm">Redirecting back...</p>
         </div>
       </div>
     );
@@ -94,38 +94,3 @@ export default function OAuthCallback() {
 
   return null;
 }
-
-const styles = {
-  container: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0f172a',
-  },
-  content: {
-    textAlign: 'center' as const,
-    color: '#e2e8f0',
-  },
-  spinner: {
-    width: '40px',
-    height: '40px',
-    border: '4px solid #1e293b',
-    borderTop: '4px solid #3b82f6',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-    margin: '0 auto 24px',
-  },
-  errorIcon: {
-    fontSize: '3rem',
-    marginBottom: '16px',
-  },
-  error: {
-    color: '#ef4444',
-    marginBottom: '16px',
-  },
-  redirect: {
-    color: '#64748b',
-    fontSize: '0.9rem',
-  },
-};

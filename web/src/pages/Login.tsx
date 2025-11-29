@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import '../styles/auth.css';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -15,7 +14,6 @@ export default function Login() {
   const [localError, setLocalError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Redirect if already logged in
   useEffect(() => {
     if (user && token) {
       navigate('/onboarding');
@@ -36,7 +34,6 @@ export default function Login() {
     setLocalError('');
     setSuccess('');
 
-    // Validation
     if (!formData.email || !formData.password) {
       setLocalError('Please fill in all fields');
       return;
@@ -59,28 +56,35 @@ export default function Login() {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <div className="auth-header">
-          <h1>Welcome Back</h1>
-          <p>Sign in to your Whoop AI Motivator account</p>
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-slate-900 to-violet-900/20"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-500/10 via-transparent to-transparent"></div>
+
+      {/* Card */}
+      <div className="relative z-10 w-full max-w-md bg-slate-800/80 backdrop-blur-sm border border-slate-700 rounded-2xl p-8 shadow-2xl">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
+          <p className="text-slate-400">Sign in to your Whoop AI Motivator account</p>
         </div>
 
         {(error || localError) && (
-          <div className="alert alert-error">
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500 rounded-lg text-red-300 text-sm">
             {error || localError}
           </div>
         )}
 
         {success && (
-          <div className="alert alert-success">
+          <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500 rounded-lg text-emerald-300 text-sm">
             {success}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          <div className="form-group">
-            <label htmlFor="email">Email Address</label>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="email" className="block text-sm font-semibold text-slate-200 mb-2">
+              Email Address
+            </label>
             <input
               id="email"
               type="email"
@@ -89,11 +93,14 @@ export default function Login() {
               onChange={handleChange}
               placeholder="you@example.com"
               disabled={loading}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all disabled:opacity-50"
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
+          <div>
+            <label htmlFor="password" className="block text-sm font-semibold text-slate-200 mb-2">
+              Password
+            </label>
             <input
               id="password"
               type="password"
@@ -102,17 +109,19 @@ export default function Login() {
               onChange={handleChange}
               placeholder="Enter your password"
               disabled={loading}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all disabled:opacity-50"
             />
           </div>
 
           <button
             type="submit"
-            className="btn btn-primary btn-lg auth-submit"
             disabled={loading}
+            className="w-full py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
-                <span className="loading"></span> Signing in...
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Signing in...
               </>
             ) : (
               'Sign In'
@@ -120,19 +129,14 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="auth-footer">
-          <p>
+        <div className="mt-8 text-center">
+          <p className="text-slate-400">
             Don't have an account?{' '}
-            <Link to="/signup" className="auth-link">
+            <Link to="/signup" className="text-blue-400 hover:text-blue-300 font-semibold transition-colors">
               Create one
             </Link>
           </p>
         </div>
-      </div>
-
-      <div className="auth-background">
-        <div className="bg-gradient"></div>
-        <div className="bg-pattern"></div>
       </div>
     </div>
   );
