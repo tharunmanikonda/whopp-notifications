@@ -41,12 +41,12 @@ app.get('/', async (c) => {
       .eq('user_id', userInfo.userId)
       .eq('is_active', true);
 
-    // Get user's metrics for the period
+    // Get user's metrics for the period from health_metrics table
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - period);
 
     const { data: metrics } = await supabase
-      .from('user_metrics')
+      .from('health_metrics')
       .select('*')
       .eq('user_id', userInfo.userId)
       .gte('date', startDate.toISOString().split('T')[0])
@@ -54,27 +54,22 @@ app.get('/', async (c) => {
 
     // Calculate today's metrics
     const today = new Date().toISOString().split('T')[0];
-    const todayMetrics = metrics?.filter(m => m.date === today) || [];
+    const todayMetric = metrics?.find(m => m.date === today) || null;
 
     // Calculate averages for the period
-    const recoveryScores = metrics?.filter(m => m.metric_type === 'recovery').map(m => m.data?.score) || [];
-    const sleepScores = metrics?.filter(m => m.metric_type === 'sleep').map(m => m.data?.score) || [];
-    const strainValues = metrics?.filter(m => m.metric_type === 'strain').map(m => m.data?.strain) || [];
+    const recoveryScores = metrics?.filter(m => m.recovery_score != null).map(m => m.recovery_score) || [];
+    const strainValues = metrics?.filter(m => m.strain != null).map(m => m.strain) || [];
+    const hrvValues = metrics?.filter(m => m.hrv != null).map(m => m.hrv) || [];
 
     const avgRecovery = recoveryScores.length > 0
-      ? recoveryScores.reduce((a, b) => a + b, 0) / recoveryScores.length
-      : null;
-    const avgSleep = sleepScores.length > 0
-      ? sleepScores.reduce((a, b) => a + b, 0) / sleepScores.length
+      ? recoveryScores.reduce((a: number, b: number) => a + b, 0) / recoveryScores.length
       : null;
     const avgStrain = strainValues.length > 0
-      ? strainValues.reduce((a, b) => a + b, 0) / strainValues.length
+      ? strainValues.reduce((a: number, b: number) => a + b, 0) / strainValues.length
       : null;
-
-    // Get today's specific values
-    const todayRecovery = todayMetrics.find(m => m.metric_type === 'recovery');
-    const todaySleep = todayMetrics.find(m => m.metric_type === 'sleep');
-    const todayStrain = todayMetrics.find(m => m.metric_type === 'strain');
+    const avgHrv = hrvValues.length > 0
+      ? hrvValues.reduce((a: number, b: number) => a + b, 0) / hrvValues.length
+      : null;
 
     // Generate insights based on data
     const insights = [];
@@ -87,8 +82,8 @@ app.get('/', async (c) => {
       }
     }
 
-    if (avgSleep !== null && avgSleep < 70) {
-      insights.push({ type: 'sleep', message: 'Try to get more quality sleep for better recovery', priority: 'info' });
+    if (avgStrain !== null && avgStrain > 18) {
+      insights.push({ type: 'strain', message: 'High strain this week - make sure to prioritize recovery', priority: 'info' });
     }
 
     if (providers?.length === 0) {
@@ -96,10 +91,10 @@ app.get('/', async (c) => {
     }
 
     // Calculate data completeness
-    const expectedDataPoints = period * 3; // recovery, sleep, strain per day
+    const expectedDataPoints = period;
     const actualDataPoints = metrics?.length || 0;
     const dataCompleteness = expectedDataPoints > 0
-      ? Math.round((actualDataPoints / expectedDataPoints) * 100)
+      ? Math.min(100, Math.round((actualDataPoints / expectedDataPoints) * 100))
       : 0;
 
     return c.json({
@@ -107,30 +102,38 @@ app.get('/', async (c) => {
       dashboard: {
         metrics: {
           today: {
-            recovery_score: todayRecovery?.data?.score || null,
-            sleep_score: todaySleep?.data?.score || null,
-            strain: todayStrain?.data?.strain || null,
-            resting_heart_rate: todayRecovery?.data?.resting_heart_rate || null,
-            hrv: todayRecovery?.data?.hrv || null,
-            data_completeness: todayMetrics.length > 0 ? 100 : 0,
+            recovery_score: todayMetric?.recovery_score || null,
+            strain: todayMetric?.strain || null,
+            calories: todayMetric?.calories || null,
+            resting_heart_rate: todayMetric?.resting_heart_rate || null,
+            average_heart_rate: todayMetric?.average_heart_rate || null,
+            max_heart_rate: todayMetric?.max_heart_rate || null,
+            hrv: todayMetric?.hrv || null,
+            date: todayMetric?.date || today,
           },
         },
+        history: metrics?.map(m => ({
+          date: m.date,
+          recovery_score: m.recovery_score,
+          strain: m.strain,
+          calories: m.calories,
+          resting_heart_rate: m.resting_heart_rate,
+          hrv: m.hrv,
+        })) || [],
         summary: {
-          average_recovery: avgRecovery,
-          average_sleep: avgSleep,
-          average_strain: avgStrain,
+          average_recovery: avgRecovery ? Math.round(avgRecovery) : null,
+          average_strain: avgStrain ? Math.round(avgStrain * 10) / 10 : null,
+          average_hrv: avgHrv ? Math.round(avgHrv * 10) / 10 : null,
           data_completeness: dataCompleteness,
+          days_with_data: actualDataPoints,
         },
         providers: {
           connected_count: providers?.length || 0,
           providers: providers?.map(p => ({
             name: p.provider_name,
             is_primary: p.is_primary,
+            last_synced: p.last_synced_at,
           })) || [],
-        },
-        messages: {
-          delivery_rate: 100, // TODO: Calculate from actual message delivery
-          recent: [], // TODO: Fetch from messages table
         },
         analytics: {
           insights,
@@ -140,6 +143,102 @@ app.get('/', async (c) => {
   } catch (error) {
     console.error('Dashboard error:', error);
     return c.json({ success: false, message: 'Failed to load dashboard' }, 500);
+  }
+});
+
+/**
+ * POST /dashboard/sync
+ * Manually sync data from WHOOP
+ */
+app.post('/sync', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization');
+    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+
+    if (!token) {
+      return c.json({ success: false, message: 'Missing authorization token' }, 401);
+    }
+
+    const userInfo = authService.verifyToken(token);
+    if (!userInfo) {
+      return c.json({ success: false, message: 'Invalid or expired token' }, 401);
+    }
+
+    const supabase = SupabaseClientService.getAdminClient();
+
+    // Get user's WHOOP provider
+    const { data: provider } = await supabase
+      .from('user_health_providers')
+      .select('id, access_token')
+      .eq('user_id', userInfo.userId)
+      .eq('provider_name', 'whoop')
+      .eq('is_active', true)
+      .single();
+
+    if (!provider) {
+      return c.json({ success: false, message: 'No WHOOP provider connected' }, 404);
+    }
+
+    // Fetch cycle data from WHOOP
+    const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer/v1';
+
+    // Get last 7 days of cycle data
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+
+    const cycleResponse = await fetch(
+      `${WHOOP_API_BASE}/cycle?start=${startDate.toISOString()}&end=${new Date().toISOString()}`,
+      {
+        headers: { Authorization: `Bearer ${provider.access_token}` },
+      }
+    );
+
+    if (!cycleResponse.ok) {
+      const errorText = await cycleResponse.text();
+      console.error('WHOOP API error:', cycleResponse.status, errorText);
+      return c.json({ success: false, message: 'Failed to fetch WHOOP data' }, 500);
+    }
+
+    const cycleData = (await cycleResponse.json()) as any;
+    const cycles = cycleData.records || [];
+
+    // Store each cycle
+    let syncedCount = 0;
+    for (const cycle of cycles) {
+      const date = cycle.start?.split('T')[0] || new Date().toISOString().split('T')[0];
+      const score = cycle.score || {};
+
+      await supabase.from('health_metrics').upsert(
+        {
+          user_id: userInfo.userId,
+          provider_id: provider.id,
+          date,
+          strain: score.strain,
+          calories: score.kilojoule ? Math.round(score.kilojoule / 4.184) : null,
+          average_heart_rate: score.average_heart_rate,
+          max_heart_rate: score.max_heart_rate,
+          raw_data: cycle,
+          synced_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,provider_id,date' }
+      );
+      syncedCount++;
+    }
+
+    // Update last_synced_at on provider
+    await supabase
+      .from('user_health_providers')
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq('id', provider.id);
+
+    return c.json({
+      success: true,
+      message: `Synced ${syncedCount} days of data`,
+      synced_count: syncedCount,
+    });
+  } catch (error) {
+    console.error('Sync error:', error);
+    return c.json({ success: false, message: 'Failed to sync data' }, 500);
   }
 });
 
