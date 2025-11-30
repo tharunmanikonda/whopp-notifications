@@ -14,14 +14,10 @@ export default function OAuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Extract tokens from URL
-        const whoopToken = searchParams.get('whoop_token');
-        const whoopRefresh = searchParams.get('whoop_refresh');
-        const provider = 'whoop';
+        // Check for errors from OAuth
         const errorParam = searchParams.get('error');
         const errorMessage = searchParams.get('message');
 
-        // Check for errors from OAuth
         if (errorParam) {
           setError(errorMessage || `OAuth error: ${errorParam}`);
           setTimeout(() => {
@@ -30,8 +26,27 @@ export default function OAuthCallback() {
           return;
         }
 
+        // Detect provider from URL params
+        const providerParam = searchParams.get('provider');
+
+        let provider: string;
+        let accessToken: string | null;
+        let refreshToken: string | null;
+
+        if (providerParam === 'fitbit') {
+          // Fitbit OAuth callback
+          provider = 'fitbit';
+          accessToken = searchParams.get('fitbit_token');
+          refreshToken = searchParams.get('fitbit_refresh');
+        } else {
+          // WHOOP OAuth callback (default for backward compatibility)
+          provider = 'whoop';
+          accessToken = searchParams.get('whoop_token');
+          refreshToken = searchParams.get('whoop_refresh');
+        }
+
         // Validate we have tokens
-        if (!whoopToken) {
+        if (!accessToken) {
           setError('No access token received from provider');
           setTimeout(() => {
             navigate('/onboarding?step=select');
@@ -49,7 +64,7 @@ export default function OAuthCallback() {
         }
 
         // Store tokens via the provider service
-        await connectProvider(token, provider, whoopToken, whoopRefresh || undefined);
+        await connectProvider(token, provider, accessToken, refreshToken || undefined);
 
         // Redirect to onboarding complete page
         navigate('/onboarding?step=complete');
@@ -73,7 +88,7 @@ export default function OAuthCallback() {
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin mx-auto mb-6"></div>
           <h2 className="text-xl font-semibold text-white mb-2">Completing OAuth Flow...</h2>
-          <p className="text-slate-400">Please wait while we authenticate you with WHOOP</p>
+          <p className="text-slate-400">Please wait while we complete authentication</p>
         </div>
       </div>
     );
