@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import SupabaseClientService from '../services/supabase-client.js';
 import { AuthService } from '../services/auth-service.js';
+import { runWhoopPollingForUser } from '../jobs/whoop-polling.js';
+import { runFitbitPollingForUser } from '../jobs/fitbit-polling.js';
 
 const app = new Hono();
 const authService = new AuthService();
@@ -148,7 +150,10 @@ app.get('/', async (c) => {
 
 /**
  * POST /dashboard/sync
- * Manually sync data from WHOOP
+ * Manually sync data from all connected providers
+ *
+ * Query params (optional):
+ * - provider: specific provider to sync ('whoop', 'fitbit') - if not provided, syncs all
  */
 app.post('/sync', async (c) => {
   try {
@@ -165,76 +170,81 @@ app.post('/sync', async (c) => {
     }
 
     const supabase = SupabaseClientService.getAdminClient();
+    const specificProvider = c.req.query('provider');
 
-    // Get user's WHOOP provider
-    const { data: provider } = await supabase
+    // Get user's connected providers
+    let query = supabase
       .from('user_health_providers')
-      .select('id, access_token')
+      .select('id, provider_name, access_token')
       .eq('user_id', userInfo.userId)
-      .eq('provider_name', 'whoop')
-      .eq('is_active', true)
-      .single();
+      .eq('is_active', true);
 
-    if (!provider) {
-      return c.json({ success: false, message: 'No WHOOP provider connected' }, 404);
+    if (specificProvider) {
+      query = query.eq('provider_name', specificProvider);
     }
 
-    // Fetch cycle data from WHOOP
-    const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer/v1';
+    const { data: providers, error: providerError } = await query;
 
-    // Get last 7 days of cycle data
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 7);
+    if (providerError || !providers || providers.length === 0) {
+      return c.json({
+        success: false,
+        message: specificProvider
+          ? `No ${specificProvider} provider connected`
+          : 'No providers connected',
+      }, 404);
+    }
 
-    const cycleResponse = await fetch(
-      `${WHOOP_API_BASE}/cycle?start=${startDate.toISOString()}&end=${new Date().toISOString()}`,
-      {
-        headers: { Authorization: `Bearer ${provider.access_token}` },
+    // Sync each provider
+    const results: { provider: string; success: boolean; data_points?: number; error?: string }[] = [];
+
+    for (const provider of providers) {
+      try {
+        let result;
+
+        switch (provider.provider_name) {
+          case 'whoop':
+            result = await runWhoopPollingForUser(userInfo.userId);
+            results.push({
+              provider: 'whoop',
+              success: result.errors.length === 0,
+              data_points: result.cycles_fetched,
+              error: result.errors.length > 0 ? result.errors.join('; ') : undefined,
+            });
+            break;
+
+          case 'fitbit':
+            result = await runFitbitPollingForUser(userInfo.userId);
+            results.push({
+              provider: 'fitbit',
+              success: result.errors.length === 0,
+              data_points: result.metrics_stored,
+              error: result.errors.length > 0 ? result.errors.join('; ') : undefined,
+            });
+            break;
+
+          default:
+            results.push({
+              provider: provider.provider_name,
+              success: false,
+              error: `Sync not implemented for ${provider.provider_name}`,
+            });
+        }
+      } catch (syncError) {
+        results.push({
+          provider: provider.provider_name,
+          success: false,
+          error: syncError instanceof Error ? syncError.message : 'Unknown error',
+        });
       }
-    );
-
-    if (!cycleResponse.ok) {
-      const errorText = await cycleResponse.text();
-      console.error('WHOOP API error:', cycleResponse.status, errorText);
-      return c.json({ success: false, message: 'Failed to fetch WHOOP data' }, 500);
     }
 
-    const cycleData = (await cycleResponse.json()) as any;
-    const cycles = cycleData.records || [];
-
-    // Store each cycle
-    let syncedCount = 0;
-    for (const cycle of cycles) {
-      const date = cycle.start?.split('T')[0] || new Date().toISOString().split('T')[0];
-      const score = cycle.score || {};
-
-      await supabase.from('health_metrics').upsert(
-        {
-          user_id: userInfo.userId,
-          provider_id: provider.id,
-          date,
-          strain: score.strain,
-          calories: score.kilojoule ? Math.round(score.kilojoule / 4.184) : null,
-          average_heart_rate: score.average_heart_rate,
-          max_heart_rate: score.max_heart_rate,
-          raw_data: cycle,
-          synced_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,provider_id,date' }
-      );
-      syncedCount++;
-    }
-
-    // Update last_synced_at on provider
-    await supabase
-      .from('user_health_providers')
-      .update({ last_synced_at: new Date().toISOString() })
-      .eq('id', provider.id);
+    const totalDataPoints = results.reduce((sum, r) => sum + (r.data_points || 0), 0);
+    const successfulSyncs = results.filter(r => r.success).length;
 
     return c.json({
-      success: true,
-      message: `Synced ${syncedCount} days of data`,
-      synced_count: syncedCount,
+      success: successfulSyncs > 0,
+      message: `Synced ${successfulSyncs}/${results.length} providers, ${totalDataPoints} data points`,
+      results,
     });
   } catch (error) {
     console.error('Sync error:', error);
